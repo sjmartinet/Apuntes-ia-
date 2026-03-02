@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Apuntes IA</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #080C0A;
+    --surface: #0E1411;
+    --surface2: #141A17;
+    --border: #1E2820;
+    --green: #2EE87A;
+    --green-dim: #1A7A45;
+    --green-glow: #2EE87A22;
+    --red: #FF4D4D;
+    --amber: #F5A623;
+    --text: #E8F0EB;
+    --text-muted: #4A5E52;
+    --text-dim: #8A9E92;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overflow:hidden; background:var(--bg); color:var(--text); font-family:'DM Sans', sans-serif; }
+
+  /* SCREENS */
+  .screen { position:fixed; inset:0; display:flex; flex-direction:column; transition:opacity .3s, transform .3s; }
+  .screen.hidden { opacity:0; pointer-events:none; transform:translateY(20px); }
+
+  /* SETUP SCREEN */
+  #setup {
+    background: var(--bg);
+    align-items: center;
+    justify-content: center;
+    padding: 32px 28px;
+    gap: 0;
+  }
+  .logo-area { text-align:center; margin-bottom:40px; }
+  .logo-icon { font-size:48px; margin-bottom:12px; display:block; filter:drop-shadow(0 0 20px var(--green)); }
+  .logo-title { font-family:'Playfair Display', serif; font-size:32px; font-weight:900; color:var(--text); line-height:1; }
+  .logo-title span { color:var(--green); }
+  .logo-sub { font-family:'DM Mono', monospace; font-size:11px; color:var(--text-muted); letter-spacing:3px; margin-top:8px; text-transform:uppercase; }
+
+  .setup-card { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:24px; width:100%; max-width:400px; }
+  .setup-label { font-family:'DM Mono', monospace; font-size:10px; letter-spacing:2px; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px; }
+  .setup-input { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:14px 16px; color:var(--text); font-family:'DM Mono', monospace; font-size:13px; outline:none; transition:border-color .2s; margin-bottom:16px; }
+  .setup-input:focus { border-color:var(--green-dim); }
+  .setup-input::placeholder { color:var(--text-muted); }
+  .setup-row { display:flex; gap:10px; margin-bottom:16px; }
+  .setup-select { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:14px 16px; color:var(--text); font-family:'DM Sans', sans-serif; font-size:14px; outline:none; appearance:none; -webkit-appearance:none; cursor:pointer; }
+  .setup-select:focus { border-color:var(--green-dim); }
+  .btn-primary { width:100%; padding:18px; background:var(--green); color:#000; font-family:'DM Sans', sans-serif; font-weight:700; font-size:16px; border:none; border-radius:14px; cursor:pointer; transition:all .2s; margin-top:4px; letter-spacing:.5px; }
+  .btn-primary:active { transform:scale(.98); background:#22c965; }
+  .btn-primary:disabled { background:var(--border); color:var(--text-muted); cursor:not-allowed; transform:none; }
+  .setup-note { font-size:11px; color:var(--text-muted); text-align:center; margin-top:14px; line-height:1.6; }
+  .setup-note a { color:var(--green-dim); text-decoration:none; }
+
+  /* RECORD SCREEN */
+  #record { background:var(--bg); padding:0; }
+  .rec-header { padding:48px 24px 20px; display:flex; align-items:center; justify-content:space-between; }
+  .rec-class { display:flex; flex-direction:column; }
+  .rec-class-label { font-family:'DM Mono', monospace; font-size:10px; color:var(--text-muted); letter-spacing:2px; text-transform:uppercase; }
+  .rec-class-name { font-family:'Playfair Display', serif; font-size:22px; font-weight:700; margin-top:2px; }
+  .rec-settings-btn { width:38px; height:38px; border-radius:50%; background:var(--surface); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px; }
+
+  /* Waveform */
+  .waveform-area { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 24px; gap:24px; }
+  .waveform { display:flex; align-items:center; justify-content:center; gap:3px; height:80px; width:100%; }
+  .waveform-bar { width:3px; border-radius:2px; background:var(--border); transition:height .1s; }
+  .waveform-bar.active { background:var(--green); box-shadow:0 0 6px var(--green); }
+  .timer { font-family:'DM Mono', monospace; font-size:52px; font-weight:300; color:var(--text); letter-spacing:-2px; }
+  .timer span { color:var(--green); }
+  .rec-status { font-family:'DM Mono', monospace; font-size:11px; letter-spacing:3px; text-transform:uppercase; }
+  .rec-status.recording { color:var(--red); }
+  .rec-status.paused { color:var(--amber); }
+  .rec-status.idle { color:var(--text-muted); }
+
+  /* Photos strip */
+  .photos-strip { padding:0 24px; margin-bottom:16px; }
+  .photos-strip-label { font-family:'DM Mono', monospace; font-size:10px; color:var(--text-muted); letter-spacing:2px; text-transform:uppercase; margin-bottom:10px; }
+  .photos-row { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; padding-bottom:4px; }
+  .photos-row::-webkit-scrollbar { display:none; }
+  .photo-thumb { width:60px; height:60px; border-radius:10px; object-fit:cover; border:1px solid var(--border); flex-shrink:0; }
+  .photo-add-btn { width:60px; height:60px; border-radius:10px; border:1.5px dashed var(--border); background:var(--surface); display:flex; align-items:center; justify-content:center; font-size:22px; cursor:pointer; flex-shrink:0; transition:border-color .2s, background .2s; }
+  .photo-add-btn:active { background:var(--surface2); border-color:var(--green-dim); }
+
+  /* Photo modal */
+  .modal-overlay { position:fixed; inset:0; background:#000b; z-index:200; display:flex; align-items:flex-end; justify-content:center; opacity:0; pointer-events:none; transition:opacity .25s; }
+  .modal-overlay.show { opacity:1; pointer-events:all; }
+  .modal-sheet { background:var(--surface); border-radius:24px 24px 0 0; padding:20px 24px 40px; width:100%; max-width:430px; transform:translateY(40px); transition:transform .25s; border-top:1px solid var(--border); }
+  .modal-overlay.show .modal-sheet { transform:translateY(0); }
+  .modal-handle { width:36px; height:4px; background:var(--border); border-radius:2px; margin:0 auto 20px; }
+  .modal-title { font-family:'Playfair Display', serif; font-size:20px; font-weight:700; margin-bottom:20px; }
+  .modal-option { display:flex; align-items:center; gap:16px; padding:18px; background:var(--surface2); border-radius:14px; cursor:pointer; margin-bottom:10px; border:1px solid var(--border); transition:border-color .2s; }
+  .modal-option:active { border-color:var(--green-dim); }
+  .modal-option-icon { font-size:28px; width:50px; height:50px; background:var(--bg); border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .modal-option-text { }
+  .modal-option-title { font-weight:600; font-size:15px; }
+  .modal-option-sub { font-size:12px; color:var(--text-muted); margin-top:2px; }
+
+  /* Controls */
+  .controls { padding:0 24px 48px; display:flex; align-items:center; justify-content:center; gap:20px; }
+  .ctrl-btn { display:flex; flex-direction:column; align-items:center; gap:6px; cursor:pointer; }
+  .ctrl-btn-circle { border-radius:50%; display:flex; align-items:center; justify-content:center; transition:all .2s; }
+  .ctrl-btn-circle:active { transform:scale(.93); }
+  .ctrl-label { font-family:'DM Mono', monospace; font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--text-muted); }
+
+  .btn-rec-main { width:88px; height:88px; background:var(--green); box-shadow:0 0 40px var(--green-glow); }
+  .btn-rec-main.recording { background:var(--red); box-shadow:0 0 40px #FF4D4D22; }
+  .btn-rec-main .inner { font-size:32px; }
+
+  .btn-secondary { width:58px; height:58px; background:var(--surface); border:1px solid var(--border); }
+  .btn-secondary .inner { font-size:22px; }
+
+  /* PROCESSING SCREEN */
+  #processing { background:var(--bg); align-items:center; justify-content:center; gap:28px; }
+  .proc-animation { display:flex; gap:5px; align-items:flex-end; height:50px; }
+  .proc-bar { width:5px; border-radius:3px; background:var(--green); animation:proc 1.2s ease-in-out infinite; }
+  .proc-bar:nth-child(1) { animation-delay:0s; }
+  .proc-bar:nth-child(2) { animation-delay:.15s; }
+  .proc-bar:nth-child(3) { animation-delay:.3s; }
+  .proc-bar:nth-child(4) { animation-delay:.45s; }
+  .proc-bar:nth-child(5) { animation-delay:.6s; }
+  @keyframes proc { 0%,100%{height:8px;opacity:.3} 50%{height:50px;opacity:1} }
+  .proc-title { font-family:'Playfair Display', serif; font-size:26px; font-weight:700; text-align:center; }
+  .proc-step { font-family:'DM Mono', monospace; font-size:12px; color:var(--green); letter-spacing:2px; text-align:center; }
+
+  /* RESULT SCREEN */
+  #result { background:var(--bg); }
+  .result-header { padding:48px 24px 16px; display:flex; align-items:center; gap:14px; flex-shrink:0; border-bottom:1px solid var(--border); }
+  .back-btn { width:38px; height:38px; border-radius:50%; background:var(--surface); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:18px; flex-shrink:0; }
+  .result-header-info { flex:1; min-width:0; }
+  .result-header-class { font-family:'DM Mono', monospace; font-size:10px; color:var(--text-muted); letter-spacing:2px; text-transform:uppercase; }
+  .result-header-title { font-family:'Playfair Display', serif; font-size:19px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+  .pdf-btn { background:var(--green); color:#000; border:none; border-radius:12px; padding:10px 16px; font-weight:700; font-size:13px; cursor:pointer; flex-shrink:0; font-family:'DM Sans', sans-serif; white-space:nowrap; }
+  .pdf-btn:active { transform:scale(.96); }
+
+  .result-body { flex:1; overflow-y:auto; padding:24px; -webkit-overflow-scrolling:touch; }
+  .result-body::-webkit-scrollbar { display:none; }
+
+  /* Note content */
+  .note-meta { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+  .note-badge { font-family:'DM Mono', monospace; font-size:10px; letter-spacing:1px; padding:5px 10px; border-radius:6px; background:var(--surface); border:1px solid var(--border); color:var(--text-dim); }
+  .note-badge.green { border-color:var(--green-dim); color:var(--green); }
+
+  .note-content { line-height:1.8; }
+  .note-content h1 { font-family:'Playfair Display', serif; font-size:24px; font-weight:900; color:var(--text); margin:0 0 6px; }
+  .note-content h2 { font-family:'Playfair Display', serif; font-size:18px; font-weight:700; color:var(--text); margin:24px 0 10px; padding-left:12px; border-left:2px solid var(--green); }
+  .note-content h3 { font-family:'DM Sans', sans-serif; font-size:14px; font-weight:600; color:var(--green); text-transform:uppercase; letter-spacing:1px; margin:18px 0 8px; }
+  .note-content p { font-size:15px; color:var(--text-dim); margin-bottom:12px; }
+  .note-content ul { padding-left:0; list-style:none; margin-bottom:16px; }
+  .note-content ul li { font-size:15px; color:var(--text-dim); padding:6px 0 6px 20px; position:relative; border-bottom:1px solid var(--border); }
+  .note-content ul li::before { content:'→'; position:absolute; left:0; color:var(--green); font-family:'DM Mono', monospace; font-size:13px; }
+  .note-content strong { color:var(--text); font-weight:600; }
+  .note-content em { color:var(--amber); font-style:normal; background:var(--surface); padding:1px 6px; border-radius:4px; font-size:13px; font-family:'DM Mono', monospace; }
+  .note-content blockquote { border-left:2px solid var(--amber); padding:12px 16px; background:var(--surface); border-radius:0 10px 10px 0; margin:16px 0; font-size:14px; color:var(--text-dim); }
+  .note-content hr { border:none; border-top:1px solid var(--border); margin:24px 0; }
+
+  .photo-in-note { border-radius:12px; width:100%; margin:16px 0; border:1px solid var(--border); display:block; }
+
+  /* Pulse animation for recording */
+  @keyframes pulse { 0%,100%{box-shadow:0 0 40px var(--green-glow)} 50%{box-shadow:0 0 60px #2EE87A44} }
+  .btn-rec-main.recording { animation:pulseRed 1.2s ease-in-out infinite; }
+  @keyframes pulseRed { 0%,100%{box-shadow:0 0 30px #FF4D4D22} 50%{box-shadow:0 0 50px #FF4D4D44} }
+
+  /* Toast */
+  .toast { position:fixed; top:60px; left:50%; transform:translateX(-50%) translateY(-80px); background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 20px; font-size:13px; color:var(--text-dim); font-family:'DM Mono', monospace; z-index:500; transition:transform .3s; white-space:nowrap; }
+  .toast.show { transform:translateX(-50%) translateY(0); }
+  .toast.error { border-color:#FF4D4D55; color:var(--red); }
+  .toast.success { border-color:var(--green-dim); color:var(--green); }
+
+  /* Scrollbar for result */
+  .result-body { scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
+</style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ══════════════════════════════════════ -->
+<!-- SCREEN 1: SETUP -->
+<!-- ══════════════════════════════════════ -->
+<div class="screen" id="setup">
+  <div class="logo-area">
+    <span class="logo-icon">🎙</span>
+    <div class="logo-title">Apuntes<span>IA</span></div>
+    <div class="logo-sub">Graba · Organiza · Exporta</div>
+  </div>
+
+  <div class="setup-card">
+    <div class="setup-label">Clave API de Anthropic</div>
+    <input class="setup-input" id="apiKey" type="password" placeholder="sk-ant-api03-..." autocomplete="off" spellcheck="false"/>
+
+    <div class="setup-label">Clave API de OpenAI (Whisper)</div>
+    <input class="setup-input" id="openaiKey" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false"/>
+
+    <div class="setup-label">Materia actual</div>
+    <div class="setup-row">
+      <select class="setup-select" id="classSelect">
+        <option value="Matemáticas">📐 Matemáticas</option>
+        <option value="Historia">📜 Historia</option>
+        <option value="Biología">🧬 Biología</option>
+        <option value="Física">⚛️ Física</option>
+        <option value="Literatura">📚 Literatura</option>
+        <option value="Química">🧪 Química</option>
+        <option value="Economía">💹 Economía</option>
+        <option value="Filosofía">🔭 Filosofía</option>
+        <option value="Otra">📓 Otra</option>
+      </select>
+      <input class="setup-input" id="customClass" style="flex:1;margin-bottom:0;display:none" placeholder="Nombre materia"/>
+    </div>
+
+    <button class="btn-primary" id="startBtn" onclick="goToRecord()">Ir a grabar →</button>
+    <div class="setup-note">
+      Las claves solo se guardan en tu dispositivo.<br/>
+      <a href="https://console.anthropic.com" target="_blank">Obtener clave Anthropic</a> · <a href="https://platform.openai.com/api-keys" target="_blank">Obtener clave OpenAI</a>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<!-- SCREEN 2: RECORD -->
+<!-- ══════════════════════════════════════ -->
+<div class="screen hidden" id="record">
+  <div class="rec-header">
+    <div class="rec-class">
+      <div class="rec-class-label">Grabando clase</div>
+      <div class="rec-class-name" id="recClassName">Matemáticas</div>
+    </div>
+    <div class="rec-settings-btn" onclick="showScreen('setup')">⚙️</div>
+  </div>
+
+  <div class="waveform-area">
+    <div class="waveform" id="waveform"></div>
+    <div class="timer" id="timer">00<span>:</span>00</div>
+    <div class="rec-status idle" id="recStatus">LISTO PARA GRABAR</div>
+  </div>
+
+  <!-- Photos strip -->
+  <div class="photos-strip" id="photosStrip" style="display:none">
+    <div class="photos-strip-label">📷 Fotos añadidas</div>
+    <div class="photos-row" id="photosRow">
+      <div class="photo-add-btn" onclick="openPhotoModal()">＋</div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="ctrl-btn" id="clearBtn" onclick="clearSession()" style="opacity:.3">
+      <div class="ctrl-btn-circle btn-secondary"><span class="inner">🗑</span></div>
+      <div class="ctrl-label">Limpiar</div>
+    </div>
+
+    <div class="ctrl-btn" onclick="toggleRecord()">
+      <div class="ctrl-btn-circle btn-rec-main" id="mainBtn"><span class="inner" id="mainBtnIcon">🎙</span></div>
+      <div class="ctrl-label" id="mainBtnLabel">GRABAR</div>
+    </div>
+
+    <div class="ctrl-btn" id="photoBtn" onclick="openPhotoModal()" style="opacity:.3">
+      <div class="ctrl-btn-circle btn-secondary"><span class="inner">📷</span></div>
+      <div class="ctrl-label">Foto</div>
+    </div>
+  </div>
+
+  <!-- Finish button (appears after recording) -->
+  <div style="padding:0 24px 0;display:none" id="finishArea">
+    <button class="btn-primary" onclick="finishAndProcess()">✨ Generar apunte con IA</button>
+    <div style="height:32px"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<!-- SCREEN 3: PROCESSING -->
+<!-- ══════════════════════════════════════ -->
+<div class="screen hidden" id="processing">
+  <div class="proc-animation">
+    <div class="proc-bar"></div>
+    <div class="proc-bar"></div>
+    <div class="proc-bar"></div>
+    <div class="proc-bar"></div>
+    <div class="proc-bar"></div>
+  </div>
+  <div class="proc-title">Organizando<br/>tu clase...</div>
+  <div class="proc-step" id="procStep">TRANSCRIBIENDO AUDIO</div>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<!-- SCREEN 4: RESULT -->
+<!-- ══════════════════════════════════════ -->
+<div class="screen hidden" id="result">
+  <div class="result-header">
+    <div class="back-btn" onclick="goToRecord()">‹</div>
+    <div class="result-header-info">
+      <div class="result-header-class" id="resultClass">MATEMÁTICAS</div>
+      <div class="result-header-title" id="resultTitle">Apunte generado</div>
+    </div>
+    <button class="pdf-btn" onclick="exportPDF()">⬇ PDF</button>
+  </div>
+  <div class="result-body" id="resultBody"></div>
+</div>
+
+<!-- PHOTO MODAL -->
+<div class="modal-overlay" id="photoModal" onclick="closePhotoModal()">
+  <div class="modal-sheet" onclick="e=>e.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Agregar imagen</div>
+    <div class="modal-option" onclick="capturePhoto()">
+      <div class="modal-option-icon">📸</div>
+      <div class="modal-option-text">
+        <div class="modal-option-title">Tomar foto</div>
+        <div class="modal-option-sub">Abrir cámara del dispositivo</div>
+      </div>
+    </div>
+    <div class="modal-option" onclick="uploadPhoto()">
+      <div class="modal-option-icon">🖼️</div>
+      <div class="modal-option-text">
+        <div class="modal-option-title">Subir imagen</div>
+        <div class="modal-option-sub">Desde galería o archivos</div>
+      </div>
+    </div>
+  </div>
+</div>
+<input type="file" accept="image/*" id="fileInput" style="display:none" onchange="handleFileInput(event)"/>
+<input type="file" accept="image/*" capture="environment" id="cameraInput" style="display:none" onchange="handleFileInput(event)"/>
+
+<script>
+// ── STATE ──
+let state = {
+  isRecording: false,
+  hasStopped: false,
+  seconds: 0,
+  timerInterval: null,
+  waveInterval: null,
+  audioChunks: [],
+  mediaRecorder: null,
+  audioBlob: null,
+  photos: [], // [{dataUrl, base64, mimeType}]
+  className: 'Matemáticas',
+  apiKey: '',
+  openaiKey: '',
+  generatedNote: '',
+};
+
+// ── HARDCODED KEYS ──
+const ANTHROPIC_KEY = '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';
+const OPENAI_KEY = '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';
+
+// ── INIT ──
+window.onload = () => {
+  // Pre-fill keys
+  document.getElementById('apiKey').value = ANTHROPIC_KEY;
+  document.getElementById('openaiKey').value = OPENAI_KEY;
+  state.apiKey = ANTHROPIC_KEY;
+  state.openaiKey = OPENAI_KEY;
+
+  // Restore saved class preference
+  const savedClass = localStorage.getItem('apuntes_class');
+  if (savedClass) document.getElementById('classSelect').value = savedClass;
+
+  // Build waveform bars
+  const wf = document.getElementById('waveform');
+  for (let i = 0; i < 40; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'waveform-bar';
+    bar.style.height = '4px';
+    wf.appendChild(bar);
+  }
+
+  // Custom class toggle
+  document.getElementById('classSelect').addEventListener('change', (e) => {
+    document.getElementById('customClass').style.display = e.target.value === 'Otra' ? 'block' : 'none';
+  });
+
+  // Go directly to record screen (keys already set)
+  const sel = document.getElementById('classSelect').value;
+  state.className = sel === 'Otra' ? 'Clase' : sel;
+  document.getElementById('recClassName').textContent = state.className;
+  showScreen('record');
+};
+
+function goToRecord() {
+  const sel = document.getElementById('classSelect').value;
+  state.className = sel === 'Otra' ? (document.getElementById('customClass').value || 'Clase') : sel;
+  localStorage.setItem('apuntes_class', sel);
+  document.getElementById('recClassName').textContent = state.className;
+  showScreen('record');
+}
+
+// ── SCREENS ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+}
+
+// ── RECORDING ──
+async function toggleRecord() {
+  if (!state.isRecording) {
+    await startRecording();
+  } else {
+    stopRecording();
+  }
+}
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    state.mediaRecorder = new MediaRecorder(stream, { mimeType: getSupportedMimeType() });
+    state.audioChunks = [];
+    state.mediaRecorder.ondataavailable = e => { if (e.data.size > 0) state.audioChunks.push(e.data); };
+    state.mediaRecorder.onstop = () => {
+      const mimeType = getSupportedMimeType();
+      state.audioBlob = new Blob(state.audioChunks, { type: mimeType });
+      stream.getTracks().forEach(t => t.stop());
+    };
+    state.mediaRecorder.start(1000);
+    state.isRecording = true;
+    state.hasStopped = false;
+    state.seconds = 0;
+
+    // UI
+    document.getElementById('mainBtn').classList.add('recording');
+    document.getElementById('mainBtnIcon').textContent = '⏹';
+    document.getElementById('mainBtnLabel').textContent = 'DETENER';
+    document.getElementById('recStatus').className = 'rec-status recording';
+    document.getElementById('recStatus').textContent = '● GRABANDO';
+    document.getElementById('photoBtn').style.opacity = '1';
+    document.getElementById('clearBtn').style.opacity = '1';
+    document.getElementById('photosStrip').style.display = 'block';
+    document.getElementById('finishArea').style.display = 'none';
+
+    // Timer
+    state.timerInterval = setInterval(() => {
+      state.seconds++;
+      const m = String(Math.floor(state.seconds / 60)).padStart(2, '0');
+      const s = String(state.seconds % 60).padStart(2, '0');
+      document.getElementById('timer').innerHTML = `${m}<span>:</span>${s}`;
+    }, 1000);
+
+    // Waveform animation
+    state.waveInterval = setInterval(() => {
+      document.querySelectorAll('.waveform-bar').forEach((bar, i) => {
+        const h = state.isRecording ? (Math.random() * 60 + 4) : 4;
+        bar.style.height = h + 'px';
+        bar.classList.toggle('active', state.isRecording);
+      });
+    }, 80);
+
+  } catch (err) {
+    showToast('No se pudo acceder al micrófono', 'error');
+  }
+}
+
+function stopRecording() {
+  if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+    state.mediaRecorder.stop();
+  }
+  state.isRecording = false;
+  state.hasStopped = true;
+  clearInterval(state.timerInterval);
+  clearInterval(state.waveInterval);
+
+  // UI
+  document.getElementById('mainBtn').classList.remove('recording');
+  document.getElementById('mainBtnIcon').textContent = '🎙';
+  document.getElementById('mainBtnLabel').textContent = 'GRABAR MÁS';
+  document.getElementById('recStatus').className = 'rec-status paused';
+  document.getElementById('recStatus').textContent = '⏸ PAUSADO';
+  document.querySelectorAll('.waveform-bar').forEach(b => { b.style.height = '4px'; b.classList.remove('active'); });
+
+  // Show finish button
+  document.getElementById('finishArea').style.display = 'block';
+}
+
+function clearSession() {
+  if (state.isRecording) stopRecording();
+  state.audioBlob = null;
+  state.audioChunks = [];
+  state.photos = [];
+  state.seconds = 0;
+  state.hasStopped = false;
+  document.getElementById('timer').innerHTML = '00<span>:</span>00';
+  document.getElementById('recStatus').className = 'rec-status idle';
+  document.getElementById('recStatus').textContent = 'LISTO PARA GRABAR';
+  document.getElementById('mainBtnIcon').textContent = '🎙';
+  document.getElementById('mainBtnLabel').textContent = 'GRABAR';
+  document.getElementById('mainBtn').classList.remove('recording');
+  document.getElementById('photoBtn').style.opacity = '0.3';
+  document.getElementById('clearBtn').style.opacity = '0.3';
+  document.getElementById('photosStrip').style.display = 'none';
+  document.getElementById('finishArea').style.display = 'none';
+  document.getElementById('photosRow').innerHTML = '<div class="photo-add-btn" onclick="openPhotoModal()">＋</div>';
+}
+
+function getSupportedMimeType() {
+  const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+  for (const t of types) { if (MediaRecorder.isTypeSupported(t)) return t; }
+  return 'audio/webm';
+}
+
+// ── PHOTOS ──
+function openPhotoModal() {
+  document.getElementById('photoModal').classList.add('show');
+}
+function closePhotoModal() {
+  document.getElementById('photoModal').classList.remove('show');
+}
+function capturePhoto() {
+  closePhotoModal();
+  document.getElementById('cameraInput').click();
+}
+function uploadPhoto() {
+  closePhotoModal();
+  document.getElementById('fileInput').click();
+}
+function handleFileInput(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    const base64 = dataUrl.split(',')[1];
+    const mimeType = file.type || 'image/jpeg';
+    state.photos.push({ dataUrl, base64, mimeType });
+
+    // Add thumb
+    const row = document.getElementById('photosRow');
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.className = 'photo-thumb';
+    const addBtn = row.querySelector('.photo-add-btn');
+    row.insertBefore(img, addBtn);
+    showToast(`Foto ${state.photos.length} añadida`, 'success');
+  };
+  reader.readAsDataURL(file);
+  event.target.value = '';
+}
+
+// ── PROCESS ──
+async function finishAndProcess() {
+  if (!state.audioBlob && state.photos.length === 0) {
+    showToast('Nada que procesar', 'error'); return;
+  }
+  showScreen('processing');
+
+  try {
+    let transcript = '';
+
+    // Step 1: Transcribe audio
+    if (state.audioBlob && state.seconds > 2) {
+      setProcStep('TRANSCRIBIENDO AUDIO CON WHISPER...');
+      transcript = await transcribeAudio(state.audioBlob);
+    }
+
+    // Step 2: Read photos with Claude Vision
+    let photoTexts = [];
+    if (state.photos.length > 0) {
+      setProcStep('LEYENDO FOTOS DEL PIZARRÓN...');
+      for (let i = 0; i < state.photos.length; i++) {
+        const text = await readPhotoWithClaude(state.photos[i]);
+        photoTexts.push(`[Foto ${i+1}]: ${text}`);
+      }
+    }
+
+    // Step 3: Organize with Claude
+    setProcStep('ORGANIZANDO APUNTES CON IA...');
+    const organized = await organizeWithClaude(transcript, photoTexts, state.className);
+
+    // Step 4: Show result
+    setProcStep('¡LISTO!');
+    state.generatedNote = organized;
+    renderResult(organized);
+    showScreen('result');
+
+  } catch (err) {
+    console.error(err);
+    showScreen('record');
+    showToast(err.message || 'Error procesando. Verifica tus claves.', 'error');
+  }
+}
+
+function setProcStep(text) {
+  document.getElementById('procStep').textContent = text;
+}
+
+// ── WHISPER TRANSCRIPTION ──
+async function transcribeAudio(blob) {
+  const formData = new FormData();
+  // Convert to mp4/webm file
+  const ext = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm';
+  formData.append('file', blob, `audio.${ext}`);
+  formData.append('model', 'whisper-1');
+  formData.append('language', 'es');
+  formData.append('response_format', 'text');
+
+  const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${state.openaiKey}` },
+    body: formData
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Whisper: ${err?.error?.message || res.statusText}`);
+  }
+  const text = await res.text();
+  return text.trim();
+}
+
+// ── CLAUDE VISION ──
+async function readPhotoWithClaude(photo) {
+  const body = {
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 800,
+    messages: [{
+      role: 'user',
+      content: [
+        {
+          type: 'image',
+          source: { type: 'base64', media_type: photo.mimeType, data: photo.base64 }
+        },
+        {
+          type: 'text',
+          text: 'Extrae y transcribe exactamente todo el contenido visible en esta imagen (texto del pizarrón, fórmulas, diagramas, esquemas). Si hay fórmulas matemáticas, escríbelas en texto plano. Si hay un diagrama, descríbelo brevemente. Responde SOLO con el contenido extraído, sin introducción.'
+        }
+      ]
+    }]
+  };
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': state.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Claude Vision: ${err?.error?.message || res.statusText}`);
+  }
+  const data = await res.json();
+  return data.content[0].text;
+}
+
+// ── CLAUDE ORGANIZE ──
+async function organizeWithClaude(transcript, photoTexts, className) {
+  const hasAudio = transcript.length > 10;
+  const hasPhotos = photoTexts.length > 0;
+
+  let inputSummary = '';
+  if (hasAudio) inputSummary += `TRANSCRIPCIÓN DEL AUDIO:\n${transcript}\n\n`;
+  if (hasPhotos) inputSummary += `CONTENIDO DE FOTOS DEL PIZARRÓN:\n${photoTexts.join('\n')}\n\n`;
+
+  const prompt = `Eres un asistente especializado en crear apuntes universitarios perfectos. 
+Analiza el siguiente material de clase de "${className}" y genera un apunte estructurado, limpio y completo.
+
+${inputSummary}
+
+Genera el apunte en HTML usando EXACTAMENTE esta estructura y estas etiquetas:
+- <h1> para el título principal del tema
+- <h2> para cada sección/subtema importante  
+- <h3> para etiquetas de tipo (DEFINICIÓN, EJEMPLO, FÓRMULA, IMPORTANTE)
+- <p> para párrafos de explicación
+- <ul><li> para listas de puntos clave
+- <strong> para conceptos importantes
+- <em> para términos técnicos o fórmulas cortas
+- <blockquote> para citas textuales del profesor o notas importantes
+- <hr> para separar secciones grandes
+
+Reglas:
+1. El título debe capturar el tema central de la clase
+2. Organiza el contenido de lo general a lo específico
+3. Si hay fórmulas del pizarrón, inclúyelas destacadas
+4. Al final, añade una sección <h2>Resumen</h2> con los 3-5 puntos más importantes como lista
+5. Responde ÚNICAMENTE con el HTML, sin etiquetas \`\`\` ni explicaciones adicionales
+6. No uses etiquetas <html>, <head>, <body> — solo el contenido interno`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': state.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Claude: ${err?.error?.message || res.statusText}`);
+  }
+  const data = await res.json();
+  return data.content[0].text;
+}
+
+// ── RENDER RESULT ──
+function renderResult(html) {
+  const date = new Date().toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'long' });
+  const duration = `${Math.floor(state.seconds/60)}m ${state.seconds%60}s`;
+
+  document.getElementById('resultClass').textContent = state.className.toUpperCase();
+
+  // Extract h1 title for header
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  const h1 = tempDiv.querySelector('h1');
+  document.getElementById('resultTitle').textContent = h1 ? h1.textContent : 'Apunte generado';
+
+  // Inject photos into content after extracting from DOM
+  let finalHtml = html;
+  // Insert photos after first h2 if any
+  if (state.photos.length > 0) {
+    const photoHtml = state.photos.map((p, i) =>
+      `<h3>📷 FOTO ${i+1} — PIZARRÓN</h3><img src="${p.dataUrl}" class="photo-in-note" />`
+    ).join('');
+    // Insert photos before the last section
+    const lastH2 = finalHtml.lastIndexOf('<h2>');
+    if (lastH2 > 0) {
+      finalHtml = finalHtml.slice(0, lastH2) + photoHtml + finalHtml.slice(lastH2);
+    } else {
+      finalHtml += photoHtml;
+    }
+  }
+
+  const meta = `
+    <div class="note-meta">
+      <span class="note-badge green">✅ ${state.className}</span>
+      <span class="note-badge">📅 ${date}</span>
+      ${state.seconds > 0 ? `<span class="note-badge">🎙 ${duration}</span>` : ''}
+      ${state.photos.length > 0 ? `<span class="note-badge">📷 ${state.photos.length} foto${state.photos.length>1?'s':''}</span>` : ''}
+    </div>
+  `;
+
+  document.getElementById('resultBody').innerHTML = meta + `<div class="note-content">${finalHtml}</div>`;
+}
+
+// ── EXPORT PDF ──
+async function exportPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+
+  const date = new Date().toLocaleDateString('es-ES', { day:'numeric', month:'long', year:'numeric' });
+  const pageW = 210;
+  const margin = 20;
+  const contentW = pageW - margin * 2;
+  let y = 25;
+
+  const addPage = () => { doc.addPage(); y = 20; };
+  const checkPage = (needed = 10) => { if (y + needed > 280) addPage(); };
+
+  // Header bar
+  doc.setFillColor(46, 232, 122);
+  doc.rect(0, 0, pageW, 14, 'F');
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`ApuntesIA · ${state.className} · ${date}`, margin, 9);
+  doc.text(`${Math.floor(state.seconds/60)}m grabados · ${state.photos.length} foto(s)`, pageW - margin, 9, { align:'right' });
+
+  y = 28;
+
+  // Parse content
+  const div = document.createElement('div');
+  div.innerHTML = state.generatedNote;
+
+  const walk = (node) => {
+    if (node.nodeType === 3) return; // text node skip
+    const tag = node.tagName?.toLowerCase();
+
+    if (tag === 'h1') {
+      checkPage(18);
+      doc.setFontSize(20);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(20, 20, 20);
+      const lines = doc.splitTextToSize(node.textContent, contentW);
+      doc.text(lines, margin, y);
+      y += lines.length * 8 + 4;
+      // Underline
+      doc.setDrawColor(46, 232, 122);
+      doc.setLineWidth(0.8);
+      doc.line(margin, y - 2, margin + contentW * 0.5, y - 2);
+      y += 6;
+    } else if (tag === 'h2') {
+      checkPage(14);
+      y += 4;
+      doc.setFillColor(20, 26, 23);
+      doc.roundedRect(margin - 4, y - 5, contentW + 8, 10, 2, 2, 'F');
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(46, 232, 122);
+      doc.text(node.textContent, margin, y + 1);
+      y += 10;
+    } else if (tag === 'h3') {
+      checkPage(10);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(245, 166, 35);
+      doc.text(node.textContent.toUpperCase(), margin, y);
+      y += 7;
+    } else if (tag === 'p') {
+      checkPage(8);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(60, 70, 65);
+      const lines = doc.splitTextToSize(node.textContent, contentW);
+      doc.text(lines, margin, y);
+      y += lines.length * 6 + 3;
+    } else if (tag === 'li') {
+      checkPage(8);
+      doc.setFillColor(46, 232, 122);
+      doc.circle(margin + 1.5, y - 1.5, 1.2, 'F');
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(60, 70, 65);
+      const lines = doc.splitTextToSize(node.textContent, contentW - 8);
+      doc.text(lines, margin + 6, y);
+      y += lines.length * 6 + 2;
+    } else if (tag === 'blockquote') {
+      checkPage(10);
+      doc.setFillColor(245, 166, 35, 0.1);
+      doc.setDrawColor(245, 166, 35);
+      doc.setLineWidth(1.5);
+      doc.line(margin, y - 2, margin, y + 10);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(100, 90, 70);
+      const lines = doc.splitTextToSize(node.textContent, contentW - 8);
+      doc.text(lines, margin + 6, y);
+      y += lines.length * 6 + 6;
+    } else if (tag === 'hr') {
+      checkPage(8);
+      doc.setDrawColor(30, 40, 32);
+      doc.setLineWidth(0.3);
+      doc.line(margin, y, margin + contentW, y);
+      y += 6;
+    } else if (tag === 'img') {
+      // Skip images in PDF (add note)
+      checkPage(8);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(100, 130, 110);
+      doc.text('[Ver foto en app]', margin, y);
+      y += 8;
+    } else {
+      // Recurse into children
+      for (const child of node.childNodes) walk(child);
+      return;
+    }
+  };
+
+  for (const child of div.childNodes) walk(child);
+
+  // Footer on each page
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`ApuntesIA · ${state.className} · Página ${i} de ${totalPages}`, pageW / 2, 290, { align:'center' });
+  }
+
+  const filename = `${state.className.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf`;
+  doc.save(filename);
+  showToast('PDF descargado ✓', 'success');
+}
+
+function goToRecord() {
+  showScreen('record');
+  if (!state.hasStopped && !state.isRecording) {
+    // fresh state
+  }
+}
+
+// ── TOAST ──
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
