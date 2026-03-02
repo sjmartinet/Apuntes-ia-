@@ -341,11 +341,13 @@ let state = {
   apiKey: '',
   openaiKey: '',
   generatedNote: '',
+  liveTranscript: '',
+  speechRec: null,
 };
 
 // ── HARDCODED KEYS ──
 const ANTHROPIC_KEY = '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';
-const OPENAI_KEY = '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';
+const OPENAI_KEY = ''; // No longer needed - using Claude only
 
 // ── INIT ──
 window.onload = () => {
@@ -353,7 +355,7 @@ window.onload = () => {
   document.getElementById('apiKey').value = ANTHROPIC_KEY;
   document.getElementById('openaiKey').value = OPENAI_KEY;
   state.apiKey = ANTHROPIC_KEY;
-  state.openaiKey = OPENAI_KEY;
+  // OpenAI not needed anymore
 
   // Restore saved class preference
   const savedClass = localStorage.getItem('apuntes_class');
@@ -418,6 +420,30 @@ async function startRecording() {
     state.isRecording = true;
     state.hasStopped = false;
     state.seconds = 0;
+    state.liveTranscript = '';
+
+    // Start live speech recognition (Web Speech API - built into browser, no external calls)
+    const SpeechRec = initSpeechRecognition();
+    if (SpeechRec) {
+      state.speechRec = SpeechRec;
+      let finalTranscript = '';
+      SpeechRec.onresult = (e) => {
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript + ' ';
+          else interim = e.results[i][0].transcript;
+        }
+        state.liveTranscript = finalTranscript + interim;
+        // Show live transcript indicator
+        const statusEl = document.getElementById('recStatus');
+        if (statusEl && state.liveTranscript.length > 0) {
+          statusEl.textContent = '● ' + state.liveTranscript.slice(-60) + '...';
+        }
+      };
+      SpeechRec.onerror = (e) => console.warn('Speech rec error:', e.error);
+      SpeechRec.onend = () => { if (state.isRecording) SpeechRec.start(); }; // auto-restart
+      SpeechRec.start();
+    }
 
     // UI
     document.getElementById('mainBtn').classList.add('recording');
@@ -460,6 +486,7 @@ function stopRecording() {
   state.hasStopped = true;
   clearInterval(state.timerInterval);
   clearInterval(state.waveInterval);
+  if (state.speechRec) { try { state.speechRec.onend = null; state.speechRec.stop(); } catch(e){} }
 
   // UI
   document.getElementById('mainBtn').classList.remove('recording');
@@ -476,6 +503,7 @@ function stopRecording() {
 function clearSession() {
   if (state.isRecording) stopRecording();
   state.audioBlob = null;
+  state.liveTranscript = '';
   state.audioChunks = [];
   state.photos = [];
   state.seconds = 0;
@@ -584,33 +612,22 @@ function setProcStep(text) {
   document.getElementById('procStep').textContent = text;
 }
 
-// ── WHISPER TRANSCRIPTION ──
+// ── TRANSCRIPCIÓN EN TIEMPO REAL CON WEB SPEECH API (built-in del navegador, sin APIs externas) ──
+// La transcripción ocurre MIENTRAS grabas, no después. Se acumula en state.liveTranscript.
+function initSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return null;
+  const rec = new SpeechRecognition();
+  rec.lang = 'es-ES';
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+  return rec;
+}
+
 async function transcribeAudio(blob) {
-  const formData = new FormData();
-  // Convert to mp4/webm file
-  const ext = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm';
-  formData.append('file', blob, `audio.${ext}`);
-  formData.append('model', 'whisper-1');
-  formData.append('language', 'es');
-  formData.append('response_format', 'text');
-
-  let resW;
-  try {
-    resW = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${state.openaiKey}` },
-      body: formData
-    });
-  } catch(e) {
-    throw new Error('Sin conexión a OpenAI Whisper. Verifica tu internet.');
-  }
-
-  if (!resW.ok) {
-    const err = await resW.json().catch(() => ({}));
-    throw new Error(`Whisper: ${err?.error?.message || resW.status + ' ' + resW.statusText}`);
-  }
-  const text = await resW.text();
-  return text.trim();
+  // Already transcribed live via Web Speech API — return accumulated transcript
+  return state.liveTranscript || '';
 }
 
 // ── CLAUDE VISION ──
